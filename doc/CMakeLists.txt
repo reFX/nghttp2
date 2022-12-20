@@ -1,3 +1,5 @@
+return() # The docs build causes errors with CMake's XCode generator
+
 # Generated documents
 set(APIDOCS
   macros.rst
