@@ -57,7 +57,7 @@ if(ENABLE_SHARED_LIB)
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 endif()
 
-if(HAVE_CUNIT OR ENABLE_STATIC_LIB)
+#if(HAVE_CUNIT OR ENABLE_STATIC_LIB)
   # Static library (for unittests because of symbol visibility)
   add_library(nghttp2_static STATIC ${NGHTTP2_SOURCES})
   set_target_properties(nghttp2_static PROPERTIES
@@ -70,7 +70,7 @@ if(HAVE_CUNIT OR ENABLE_STATIC_LIB)
     install(TARGETS nghttp2_static
       DESTINATION "${CMAKE_INSTALL_LIBDIR}")
   endif()
-endif()
+#endif()
 
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libnghttp2.pc"
