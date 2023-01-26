@@ -66,6 +66,11 @@ endif()
     ARCHIVE_OUTPUT_NAME nghttp2${STATIC_LIB_SUFFIX}
   )
   target_compile_definitions(nghttp2_static PUBLIC "-DNGHTTP2_STATICLIB")
+
+  target_include_directories(nghttp2_static PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/includes>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/includes>")
+
   if(ENABLE_STATIC_LIB)
     install(TARGETS nghttp2_static
       DESTINATION "${CMAKE_INSTALL_LIBDIR}")
