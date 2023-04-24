@@ -629,24 +629,28 @@ int Http3Upstream::init(const UpstreamAddr *faddr, const Address &remote_addr,
 
 #ifdef OPENSSL_IS_BORINGSSL
   if (quicconf.upstream.early_data) {
-    ngtcp2_transport_params early_data_params{
-        .initial_max_stream_data_bidi_local =
-            params.initial_max_stream_data_bidi_local,
-        .initial_max_stream_data_bidi_remote =
-            params.initial_max_stream_data_bidi_remote,
-        .initial_max_stream_data_uni = params.initial_max_stream_data_uni,
-        .initial_max_data = params.initial_max_data,
-        .initial_max_streams_bidi = params.initial_max_streams_bidi,
-        .initial_max_streams_uni = params.initial_max_streams_uni,
-    };
+    ngtcp2_transport_params early_data_params;
+
+    ngtcp2_transport_params_default(&early_data_params);
+
+    early_data_params.initial_max_stream_data_bidi_local =
+        params.initial_max_stream_data_bidi_local;
+    early_data_params.initial_max_stream_data_bidi_remote =
+        params.initial_max_stream_data_bidi_remote;
+    early_data_params.initial_max_stream_data_uni =
+        params.initial_max_stream_data_uni;
+    early_data_params.initial_max_data = params.initial_max_data;
+    early_data_params.initial_max_streams_bidi =
+        params.initial_max_streams_bidi;
+    early_data_params.initial_max_streams_uni = params.initial_max_streams_uni;
 
     // TODO include HTTP/3 SETTINGS
 
     std::array<uint8_t, 128> quic_early_data_ctx;
 
-    auto quic_early_data_ctxlen = ngtcp2_encode_transport_params(
+    auto quic_early_data_ctxlen = ngtcp2_transport_params_encode(
         quic_early_data_ctx.data(), quic_early_data_ctx.size(),
-        NGTCP2_TRANSPORT_PARAMS_TYPE_ENCRYPTED_EXTENSIONS, &early_data_params);
+        &early_data_params);
 
     assert(quic_early_data_ctxlen > 0);
     assert(static_cast<size_t>(quic_early_data_ctxlen) <=
@@ -668,6 +672,8 @@ int Http3Upstream::init(const UpstreamAddr *faddr, const Address &remote_addr,
   } else {
     params.original_dcid = initial_hd.dcid;
   }
+
+  params.original_dcid_present = 1;
 
   rv = generate_quic_stateless_reset_token(
       params.stateless_reset_token, scid, qkm.secret.data(), qkm.secret.size());
@@ -727,6 +733,8 @@ int Http3Upstream::on_write() {
       return 0;
     }
   }
+
+  handler_->get_connection()->wlimit.stopw();
 
   if (write_streams() != 0) {
     return -1;
@@ -849,17 +857,11 @@ int Http3Upstream::write_streams() {
           on_send_blocked(faddr, prev_ps.path.remote, prev_ps.path.local,
                           prev_pi, data, datalen, gso_size);
 
-          ngtcp2_conn_update_pkt_tx_time(conn_, ts);
-
           signal_write_upstream_addr(faddr);
-
-          return 0;
         }
       }
 
       ngtcp2_conn_update_pkt_tx_time(conn_, ts);
-
-      handler_->get_connection()->wlimit.stopw();
 
       return 0;
     }
@@ -906,9 +908,9 @@ int Http3Upstream::write_streams() {
         if (rv == SHRPX_ERR_SEND_BLOCKED) {
           on_send_blocked(faddr, ps.path.remote, ps.path.local, pi, data,
                           nwrite, 0);
-        }
 
-        signal_write_upstream_addr(faddr);
+          signal_write_upstream_addr(faddr);
+        }
       }
       }
 
@@ -928,11 +930,11 @@ int Http3Upstream::write_streams() {
       if (rv == SHRPX_ERR_SEND_BLOCKED) {
         on_send_blocked(faddr, ps.path.remote, ps.path.local, pi, data, datalen,
                         gso_size);
+
+        signal_write_upstream_addr(faddr);
       }
 
       ngtcp2_conn_update_pkt_tx_time(conn_, ts);
-
-      signal_write_upstream_addr(faddr);
 
       return 0;
     }
@@ -957,8 +959,6 @@ int Http3Upstream::write_streams() {
 
     if (++pktcnt == max_pktcnt) {
       ngtcp2_conn_update_pkt_tx_time(conn_, ts);
-
-      signal_write_upstream_addr(faddr);
 
       return 0;
     }

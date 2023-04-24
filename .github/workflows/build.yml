@@ -8,9 +8,9 @@ env:
   LIBBPF_VERSION: v1.1.0
   OPENSSL1_VERSION: 1_1_1t+quic
   OPENSSL3_VERSION: 3.0.8+quic
-  BORINGSSL_VERSION: 80a243e07ef77156af66efa7d22ac35aba44c1b3
-  NGHTTP3_VERSION: v0.9.0
-  NGTCP2_VERSION: v0.13.1
+  BORINGSSL_VERSION: 74646566e93de7551bfdfc5f49de7462f13d1d05
+  NGHTTP3_VERSION: v0.10.0
+  NGTCP2_VERSION: v0.14.0
 
 jobs:
   build-cache:
@@ -94,7 +94,7 @@ jobs:
           cmake \
           cmake-data
     - name: MacOS setup
-      if: runner.os == 'macOS'
+      if: runner.os == 'macOS' && steps.settings.outputs.needs-build == 'true'
       run: |
         brew install \
           autoconf \
@@ -454,15 +454,28 @@ jobs:
         wine main.exe
 
   build-windows:
+    strategy:
+      matrix:
+        arch: [x86, x64]
+        include:
+        - arch: x86
+          platform: Win32
+        - arch: x64
+          platform: x64
+
     runs-on: windows-latest
 
     steps:
     - uses: actions/checkout@v3
+    - uses: microsoft/setup-msbuild@v1
+    - run: |
+        vcpkg --triplet=${{ matrix.arch }}-windows install cunit
     - name: Configure cmake
       run: |
         mkdir build
         cd build
-        cmake ..
+        cmake -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_GENERATOR_PLATFORM=${{ matrix.platform }} -DVCPKG_TARGET_TRIPLET=${{ matrix.arch}}-windows ..
     - name: Build nghttp2
       run: |
         cmake --build build
+        cmake --build build --target check
