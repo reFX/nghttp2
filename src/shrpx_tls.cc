@@ -64,9 +64,9 @@
 #ifdef ENABLE_HTTP3
 #  include <ngtcp2/ngtcp2.h>
 #  include <ngtcp2/ngtcp2_crypto.h>
-#  ifdef HAVE_LIBNGTCP2_CRYPTO_OPENSSL
-#    include <ngtcp2/ngtcp2_crypto_openssl.h>
-#  endif // HAVE_LIBNGTCP2_CRYPTO_OPENSSL
+#  ifdef HAVE_LIBNGTCP2_CRYPTO_QUICTLS
+#    include <ngtcp2/ngtcp2_crypto_quictls.h>
+#  endif // HAVE_LIBNGTCP2_CRYPTO_QUICTLS
 #  ifdef HAVE_LIBNGTCP2_CRYPTO_BORINGSSL
 #    include <ngtcp2/ngtcp2_crypto_boringssl.h>
 #  endif // HAVE_LIBNGTCP2_CRYPTO_BORINGSSL
@@ -90,6 +90,7 @@
 #include "timegm.h"
 
 using namespace nghttp2;
+using namespace std::chrono_literals;
 
 namespace shrpx {
 
@@ -383,7 +384,7 @@ int tls_session_client_new_cb(SSL *ssl, SSL_SESSION *session) {
   }
 
   try_cache_tls_session(conn->tls.client_session_cache, session,
-                        ev_now(conn->loop));
+                        std::chrono::steady_clock::now());
 
   return 0;
 }
@@ -1257,12 +1258,12 @@ SSL_CTX *create_quic_ssl_context(const char *private_key_file,
 
   SSL_CTX_set_options(ssl_ctx, ssl_opts);
 
-#  ifdef HAVE_LIBNGTCP2_CRYPTO_OPENSSL
-  if (ngtcp2_crypto_openssl_configure_server_context(ssl_ctx) != 0) {
-    LOG(FATAL) << "ngtcp2_crypto_openssl_configure_server_context failed";
+#  ifdef HAVE_LIBNGTCP2_CRYPTO_QUICTLS
+  if (ngtcp2_crypto_quictls_configure_server_context(ssl_ctx) != 0) {
+    LOG(FATAL) << "ngtcp2_crypto_quictls_configure_server_context failed";
     DIE();
   }
-#  endif // HAVE_LIBNGTCP2_CRYPTO_OPENSSL
+#  endif // HAVE_LIBNGTCP2_CRYPTO_QUICTLS
 #  ifdef HAVE_LIBNGTCP2_CRYPTO_BORINGSSL
   if (ngtcp2_crypto_boringssl_configure_server_context(ssl_ctx) != 0) {
     LOG(FATAL) << "ngtcp2_crypto_boringssl_configure_server_context failed";
@@ -2427,8 +2428,8 @@ std::vector<uint8_t> serialize_ssl_session(SSL_SESSION *session) {
 } // namespace
 
 void try_cache_tls_session(TLSSessionCache *cache, SSL_SESSION *session,
-                           ev_tstamp t) {
-  if (cache->last_updated + 1_min > t) {
+                           const std::chrono::steady_clock::time_point &t) {
+  if (cache->last_updated + 1min > t) {
     if (LOG_ENABLED(INFO)) {
       LOG(INFO) << "Client session cache entry is still fresh.";
     }
@@ -2437,7 +2438,7 @@ void try_cache_tls_session(TLSSessionCache *cache, SSL_SESSION *session,
 
   if (LOG_ENABLED(INFO)) {
     LOG(INFO) << "Update client cache entry "
-              << "timestamp = " << t;
+              << "timestamp = " << t.time_since_epoch().count();
   }
 
   cache->session_data = serialize_ssl_session(session);
@@ -2597,13 +2598,6 @@ StringRef get_x509_subject_name(BlockAllocator &balloc, X509 *x) {
 StringRef get_x509_issuer_name(BlockAllocator &balloc, X509 *x) {
   return get_x509_name(balloc, X509_get_issuer_name(x));
 }
-
-#ifdef WORDS_BIGENDIAN
-#  define bswap64(N) (N)
-#else /* !WORDS_BIGENDIAN */
-#  define bswap64(N)                                                           \
-    ((uint64_t)(ntohl((uint32_t)(N))) << 32 | ntohl((uint32_t)((N) >> 32)))
-#endif /* !WORDS_BIGENDIAN */
 
 StringRef get_x509_serial(BlockAllocator &balloc, X509 *x) {
   auto sn = X509_get_serialNumber(x);

@@ -5,18 +5,18 @@ on: [push, pull_request]
 permissions: read-all
 
 env:
-  LIBBPF_VERSION: v1.1.0
-  OPENSSL1_VERSION: 1_1_1t+quic
-  OPENSSL3_VERSION: 3.0.8+quic
-  BORINGSSL_VERSION: 74646566e93de7551bfdfc5f49de7462f13d1d05
-  NGHTTP3_VERSION: v0.10.0
-  NGTCP2_VERSION: v0.14.0
+  LIBBPF_VERSION: v1.2.0
+  OPENSSL1_VERSION: 1_1_1v+quic
+  OPENSSL3_VERSION: 3.1.2+quic
+  BORINGSSL_VERSION: 80dcb67d4481fb1194b9669917e35580c32dc388
+  NGHTTP3_VERSION: v0.13.0
+  NGTCP2_VERSION: v0.17.0
 
 jobs:
   build-cache:
     strategy:
       matrix:
-        os: [ubuntu-22.04, macos-11]
+        os: [ubuntu-22.04, macos-12]
 
     runs-on: ${{ matrix.os }}
 
@@ -35,7 +35,7 @@ jobs:
       with:
         path: openssl1/build
         key: ${{ runner.os }}-openssl-${{ env.OPENSSL1_VERSION }}
-    - name: Restore OpenSSL v3.0.x cache
+    - name: Restore OpenSSL v3.x cache
       id: cache-openssl3
       uses: actions/cache@v3
       with:
@@ -62,7 +62,7 @@ jobs:
       with:
         path: ngtcp2-openssl1/build
         key: ${{ runner.os }}-ngtcp2-${{ env.NGTCP2_VERSION }}-openssl-${{ env.OPENSSL1_VERSION }}
-    - name: Restore ngtcp2 + quictls/openssl v3.0.x cache
+    - name: Restore ngtcp2 + quictls/openssl v3.x cache
       id: cache-ngtcp2-openssl3
       uses: actions/cache@v3
       with:
@@ -115,7 +115,7 @@ jobs:
         ./config --prefix=$PWD/build
         make -j"$(nproc 2> /dev/null || sysctl -n hw.ncpu)"
         make install_sw
-    - name: Build quictls/openssl v3.0.x
+    - name: Build quictls/openssl v3.x
       if: steps.cache-openssl3.outputs.cache-hit != 'true'
       run: |
         git clone --depth 1 -b openssl-${{ env.OPENSSL3_VERSION }} https://github.com/quictls/openssl openssl3
@@ -155,7 +155,7 @@ jobs:
           --with-boringssl
         make -j"$(nproc 2> /dev/null || sysctl -n hw.ncpu)" check
         make install
-    - name: Build ngtcp2 + quictls/openssl v3.0.x
+    - name: Build ngtcp2 + quictls/openssl v3.x
       if: steps.cache-ngtcp2-openssl3.outputs.cache-hit != 'true'
       run: |
         git clone --depth 1 -b ${{ env.NGTCP2_VERSION }} https://github.com/ngtcp2/ngtcp2 ngtcp2-openssl3
@@ -175,22 +175,22 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-22.04, macos-11]
+        os: [ubuntu-22.04, macos-12]
         compiler: [gcc, clang]
         buildtool: [autotools, cmake]
         http3: [http3, no-http3]
         openssl: [openssl1, openssl3, boringssl]
         exclude:
-        - os: macos-11
+        - os: macos-12
           openssl: openssl3
         - http3: no-http3
           openssl: openssl3
-        - os: macos-11
+        - os: macos-12
           compiler: gcc
         - # disable macos cmake because of include path issue
-          os: macos-11
+          os: macos-12
           buildtool: cmake
-        - os: macos-11
+        - os: macos-12
           openssl: boringssl
         - openssl: boringssl
           buildtool: cmake
@@ -284,7 +284,7 @@ jobs:
         path: openssl1/build
         key: ${{ runner.os }}-openssl-${{ env.OPENSSL1_VERSION }}
         fail-on-cache-miss: true
-    - name: Restore quictls/openssl v3.0.x cache
+    - name: Restore quictls/openssl v3.x cache
       uses: actions/cache/restore@v3
       if: matrix.http3 == 'http3' && matrix.openssl == 'openssl3'
       with:
@@ -329,7 +329,7 @@ jobs:
         path: ngtcp2-openssl1/build
         key: ${{ runner.os }}-ngtcp2-${{ env.NGTCP2_VERSION }}-openssl-${{ env.OPENSSL1_VERSION }}
         fail-on-cache-miss: true
-    - name: Restore ngtcp2 + quictls/openssl v3.0.x cache
+    - name: Restore ngtcp2 + quictls/openssl v3.x cache
       uses: actions/cache/restore@v3
       if: matrix.http3 == 'http3' && matrix.openssl == 'openssl3'
       with:
@@ -397,7 +397,7 @@ jobs:
     - uses: actions/setup-go@v3
       if: matrix.buildtool == 'cmake'
       with:
-        go-version: '1.19'
+        go-version-file: go.mod
     - name: Integration test
       # Integration tests for nghttpx; autotools erases build
       # artifacts.
